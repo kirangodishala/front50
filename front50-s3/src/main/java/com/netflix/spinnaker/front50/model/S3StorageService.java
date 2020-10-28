@@ -25,7 +25,7 @@ import com.amazonaws.util.StringUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
-import com.netflix.spinnaker.front50.exception.NotFoundException;
+import com.netflix.spinnaker.kork.web.exceptions.NotFoundException;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.Duration;
@@ -69,7 +69,6 @@ public class S3StorageService implements StorageService {
     this.serverSideEncryption = serverSideEncryption;
   }
 
-  @Override
   public void ensureBucketExists() {
     HeadBucketRequest request = new HeadBucketRequest(bucket);
     try {

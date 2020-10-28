@@ -19,7 +19,7 @@ package com.netflix.spinnaker.front50.model;
 import static net.logstash.logback.argument.StructuredArguments.value;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.netflix.spinnaker.front50.exception.NotFoundException;
+import com.netflix.spinnaker.kork.web.exceptions.NotFoundException;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -89,7 +89,6 @@ public class SwiftStorageService implements StorageService {
   }
 
   /** Check to see if the bucket (Swift container) exists, creating it if it is not there. */
-  @Override
   public void ensureBucketExists() {
     List<? extends SwiftContainer> containers =
         getSwift().containers().list(ContainerListOptions.create().startsWith(containerName));

@@ -16,15 +16,13 @@
 
 package com.netflix.spinnaker.front50.model;
 
-import com.netflix.spinnaker.front50.exception.NotFoundException;
+import com.netflix.spinnaker.kork.web.exceptions.NotFoundException;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
 public interface StorageService {
-  /** Check to see if the bucket exists, creating it if it is not there. */
-  void ensureBucketExists();
 
   /** @return true if the storage service supports versioning. */
   boolean supportsVersioning();

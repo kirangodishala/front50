@@ -22,7 +22,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class GcsProperties {
   private String bucket;
 
-  private String bucketLocation;
+  private String bucketLocation = "";
 
   private String rootFolder = "front50";
 
@@ -35,6 +35,10 @@ public class GcsProperties {
   }
 
   public void setBucket(String bucket) {
+    // "google.com:" is deprecated but may be in certain old projects.
+    if (bucket.startsWith("google.com:")) {
+      bucket = bucket.substring("google.com:".length());
+    }
     this.bucket = bucket;
   }
 

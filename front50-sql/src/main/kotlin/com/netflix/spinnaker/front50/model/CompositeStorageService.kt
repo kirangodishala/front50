@@ -17,8 +17,8 @@
 package com.netflix.spinnaker.front50.model
 
 import com.netflix.spectator.api.Registry
-import com.netflix.spinnaker.front50.exception.NotFoundException
 import com.netflix.spinnaker.kork.dynamicconfig.DynamicConfigService
+import com.netflix.spinnaker.kork.web.exceptions.NotFoundException
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 
@@ -27,7 +27,7 @@ class CompositeStorageService(
   private val registry: Registry,
   private val primary: StorageService,
   private val previous: StorageService
-) : StorageService {
+) : StorageService, BulkStorageService, AdminOperations {
 
   companion object {
     private val log = LoggerFactory.getLogger(CompositeStorageService::class.java)
@@ -64,11 +64,6 @@ class CompositeStorageService(
 
     primaryReadStatusGauge.set(if (isPrimaryReadEnabled()) 1.0 else 0.0)
     previousReadStatusGauge.set(if (isPreviousReadEnabled()) 1.0 else 0.0)
-  }
-
-  override fun ensureBucketExists() {
-    primary.ensureBucketExists()
-    previous.ensureBucketExists()
   }
 
   override fun supportsVersioning(): Boolean {
@@ -185,7 +180,8 @@ class CompositeStorageService(
       try {
         return primary.listObjectVersions(objectType, objectKey, maxResults)
       } catch (e: NotFoundException) {
-        log.debug("{}.listObjectVersions({}, {}, {}) not found (primary)",
+        log.debug(
+          "{}.listObjectVersions({}, {}, {}) not found (primary)",
           primary.javaClass.simpleName,
           objectType,
           objectKey,
@@ -244,4 +240,22 @@ class CompositeStorageService(
       "spinnaker.migration.compositeStorageService.reads.$type",
       false
     )
+
+  override fun <T : Timestamped?> storeObjects(objectType: ObjectType?, items: MutableCollection<T>?) {
+    if (previous is BulkStorageService) {
+      previous.storeObjects(objectType, items)
+    }
+    if (primary is BulkStorageService) {
+      primary.storeObjects(objectType, items)
+    }
+  }
+
+  override fun recover(operation: AdminOperations.Recover?) {
+    if (previous is AdminOperations) {
+      previous.recover(operation)
+    }
+    if (primary is AdminOperations) {
+      primary.recover(operation)
+    }
+  }
 }

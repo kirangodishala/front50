@@ -46,11 +46,14 @@ import com.netflix.spinnaker.front50.model.snapshot.DefaultSnapshotDAO;
 import com.netflix.spinnaker.front50.model.snapshot.SnapshotDAO;
 import com.netflix.spinnaker.front50.model.tag.DefaultEntityTagsDAO;
 import com.netflix.spinnaker.front50.model.tag.EntityTagsDAO;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import java.util.concurrent.Executors;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import rx.schedulers.Schedulers;
 
+@Configuration
 public class CommonStorageServiceDAOConfig {
   @Bean
   @ConditionalOnMissingBean(ObjectKeyLoader.class)
@@ -63,7 +66,8 @@ public class CommonStorageServiceDAOConfig {
       StorageService storageService,
       StorageServiceConfigurationProperties storageServiceConfigurationProperties,
       ObjectKeyLoader objectKeyLoader,
-      Registry registry) {
+      Registry registry,
+      CircuitBreakerRegistry circuitBreakerRegistry) {
     return new DefaultApplicationDAO(
         storageService,
         Schedulers.from(
@@ -72,15 +76,18 @@ public class CommonStorageServiceDAOConfig {
         objectKeyLoader,
         storageServiceConfigurationProperties.getApplication().getRefreshMs(),
         storageServiceConfigurationProperties.getApplication().getShouldWarmCache(),
-        registry);
+        registry,
+        circuitBreakerRegistry);
   }
 
   @Bean
+  @ConditionalOnMissingBean // GcsConfig overrides this
   ApplicationPermissionDAO applicationPermissionDAO(
       StorageService storageService,
       StorageServiceConfigurationProperties storageServiceConfigurationProperties,
       ObjectKeyLoader objectKeyLoader,
-      Registry registry) {
+      Registry registry,
+      CircuitBreakerRegistry circuitBreakerRegistry) {
     return new DefaultApplicationPermissionDAO(
         storageService,
         Schedulers.from(
@@ -89,7 +96,8 @@ public class CommonStorageServiceDAOConfig {
         objectKeyLoader,
         storageServiceConfigurationProperties.getApplicationPermission().getRefreshMs(),
         storageServiceConfigurationProperties.getApplicationPermission().getShouldWarmCache(),
-        registry);
+        registry,
+        circuitBreakerRegistry);
   }
 
   @Bean
@@ -97,7 +105,8 @@ public class CommonStorageServiceDAOConfig {
       StorageService storageService,
       StorageServiceConfigurationProperties storageServiceConfigurationProperties,
       ObjectKeyLoader objectKeyLoader,
-      Registry registry) {
+      Registry registry,
+      CircuitBreakerRegistry circuitBreakerRegistry) {
     return new DefaultServiceAccountDAO(
         storageService,
         Schedulers.from(
@@ -106,7 +115,8 @@ public class CommonStorageServiceDAOConfig {
         objectKeyLoader,
         storageServiceConfigurationProperties.getServiceAccount().getRefreshMs(),
         storageServiceConfigurationProperties.getServiceAccount().getShouldWarmCache(),
-        registry);
+        registry,
+        circuitBreakerRegistry);
   }
 
   @Bean
@@ -114,7 +124,8 @@ public class CommonStorageServiceDAOConfig {
       StorageService storageService,
       StorageServiceConfigurationProperties storageServiceConfigurationProperties,
       ObjectKeyLoader objectKeyLoader,
-      Registry registry) {
+      Registry registry,
+      CircuitBreakerRegistry circuitBreakerRegistry) {
     return new DefaultProjectDAO(
         storageService,
         Schedulers.from(
@@ -123,7 +134,8 @@ public class CommonStorageServiceDAOConfig {
         objectKeyLoader,
         storageServiceConfigurationProperties.getProject().getRefreshMs(),
         storageServiceConfigurationProperties.getProject().getShouldWarmCache(),
-        registry);
+        registry,
+        circuitBreakerRegistry);
   }
 
   @Bean
@@ -131,7 +143,8 @@ public class CommonStorageServiceDAOConfig {
       StorageService storageService,
       StorageServiceConfigurationProperties storageServiceConfigurationProperties,
       ObjectKeyLoader objectKeyLoader,
-      Registry registry) {
+      Registry registry,
+      CircuitBreakerRegistry circuitBreakerRegistry) {
     return new DefaultNotificationDAO(
         storageService,
         Schedulers.from(
@@ -140,7 +153,8 @@ public class CommonStorageServiceDAOConfig {
         objectKeyLoader,
         storageServiceConfigurationProperties.getNotification().getRefreshMs(),
         storageServiceConfigurationProperties.getNotification().getShouldWarmCache(),
-        registry);
+        registry,
+        circuitBreakerRegistry);
   }
 
   @Bean
@@ -148,7 +162,8 @@ public class CommonStorageServiceDAOConfig {
       StorageService storageService,
       StorageServiceConfigurationProperties storageServiceConfigurationProperties,
       ObjectKeyLoader objectKeyLoader,
-      Registry registry) {
+      Registry registry,
+      CircuitBreakerRegistry circuitBreakerRegistry) {
     return new DefaultPipelineStrategyDAO(
         storageService,
         Schedulers.from(
@@ -157,7 +172,8 @@ public class CommonStorageServiceDAOConfig {
         objectKeyLoader,
         storageServiceConfigurationProperties.getPipelineStrategy().getRefreshMs(),
         storageServiceConfigurationProperties.getPipelineStrategy().getShouldWarmCache(),
-        registry);
+        registry,
+        circuitBreakerRegistry);
   }
 
   @Bean
@@ -165,7 +181,8 @@ public class CommonStorageServiceDAOConfig {
       StorageService storageService,
       StorageServiceConfigurationProperties storageServiceConfigurationProperties,
       ObjectKeyLoader objectKeyLoader,
-      Registry registry) {
+      Registry registry,
+      CircuitBreakerRegistry circuitBreakerRegistry) {
     return new DefaultPipelineDAO(
         storageService,
         Schedulers.from(
@@ -174,7 +191,8 @@ public class CommonStorageServiceDAOConfig {
         objectKeyLoader,
         storageServiceConfigurationProperties.getPipeline().getRefreshMs(),
         storageServiceConfigurationProperties.getPipeline().getShouldWarmCache(),
-        registry);
+        registry,
+        circuitBreakerRegistry);
   }
 
   @Bean
@@ -182,7 +200,8 @@ public class CommonStorageServiceDAOConfig {
       StorageService storageService,
       StorageServiceConfigurationProperties storageServiceConfigurationProperties,
       ObjectKeyLoader objectKeyLoader,
-      Registry registry) {
+      Registry registry,
+      CircuitBreakerRegistry circuitBreakerRegistry) {
     return new DefaultPipelineTemplateDAO(
         storageService,
         Schedulers.from(
@@ -191,7 +210,8 @@ public class CommonStorageServiceDAOConfig {
         objectKeyLoader,
         storageServiceConfigurationProperties.getPipelineTemplate().getRefreshMs(),
         storageServiceConfigurationProperties.getPipelineTemplate().getShouldWarmCache(),
-        registry);
+        registry,
+        circuitBreakerRegistry);
   }
 
   @Bean
@@ -199,7 +219,8 @@ public class CommonStorageServiceDAOConfig {
       StorageService storageService,
       StorageServiceConfigurationProperties storageServiceConfigurationProperties,
       ObjectKeyLoader objectKeyLoader,
-      Registry registry) {
+      Registry registry,
+      CircuitBreakerRegistry circuitBreakerRegistry) {
     return new DefaultSnapshotDAO(
         storageService,
         Schedulers.from(
@@ -208,7 +229,8 @@ public class CommonStorageServiceDAOConfig {
         objectKeyLoader,
         storageServiceConfigurationProperties.getSnapshot().getRefreshMs(),
         storageServiceConfigurationProperties.getSnapshot().getShouldWarmCache(),
-        registry);
+        registry,
+        circuitBreakerRegistry);
   }
 
   @Bean
@@ -216,7 +238,8 @@ public class CommonStorageServiceDAOConfig {
       StorageService storageService,
       StorageServiceConfigurationProperties storageServiceConfigurationProperties,
       ObjectKeyLoader objectKeyLoader,
-      Registry registry) {
+      Registry registry,
+      CircuitBreakerRegistry circuitBreakerRegistry) {
     return new DefaultEntityTagsDAO(
         storageService,
         Schedulers.from(
@@ -225,7 +248,8 @@ public class CommonStorageServiceDAOConfig {
         objectKeyLoader,
         storageServiceConfigurationProperties.getEntityTags().getRefreshMs(),
         storageServiceConfigurationProperties.getEntityTags().getShouldWarmCache(),
-        registry);
+        registry,
+        circuitBreakerRegistry);
   }
 
   @Bean
@@ -233,7 +257,8 @@ public class CommonStorageServiceDAOConfig {
       StorageService storageService,
       StorageServiceConfigurationProperties storageServiceConfigurationProperties,
       ObjectKeyLoader objectKeyLoader,
-      Registry registry) {
+      Registry registry,
+      CircuitBreakerRegistry circuitBreakerRegistry) {
     return new DefaultDeliveryRepository(
         storageService,
         Schedulers.from(
@@ -242,7 +267,8 @@ public class CommonStorageServiceDAOConfig {
         objectKeyLoader,
         storageServiceConfigurationProperties.getDeliveryConfig().getRefreshMs(),
         storageServiceConfigurationProperties.getDeliveryConfig().getShouldWarmCache(),
-        registry);
+        registry,
+        circuitBreakerRegistry);
   }
 
   @Bean
@@ -250,7 +276,8 @@ public class CommonStorageServiceDAOConfig {
       StorageService storageService,
       StorageServiceConfigurationProperties storageServiceConfigurationProperties,
       ObjectKeyLoader objectKeyLoader,
-      Registry registry) {
+      Registry registry,
+      CircuitBreakerRegistry circuitBreakerRegistry) {
     return new DefaultPluginInfoRepository(
         storageService,
         Schedulers.from(
@@ -259,7 +286,8 @@ public class CommonStorageServiceDAOConfig {
         objectKeyLoader,
         storageServiceConfigurationProperties.getPluginInfo().getRefreshMs(),
         storageServiceConfigurationProperties.getPluginInfo().getShouldWarmCache(),
-        registry);
+        registry,
+        circuitBreakerRegistry);
   }
 
   @Bean
@@ -267,7 +295,8 @@ public class CommonStorageServiceDAOConfig {
       StorageService storageService,
       StorageServiceConfigurationProperties storageServiceConfigurationProperties,
       ObjectKeyLoader objectKeyLoader,
-      Registry registry) {
+      Registry registry,
+      CircuitBreakerRegistry circuitBreakerRegistry) {
     return new DefaultPluginVersionPinningRepository(
         storageService,
         Schedulers.from(
@@ -276,6 +305,7 @@ public class CommonStorageServiceDAOConfig {
         objectKeyLoader,
         storageServiceConfigurationProperties.getPluginInfo().getRefreshMs(),
         storageServiceConfigurationProperties.getPluginInfo().getShouldWarmCache(),
-        registry);
+        registry,
+        circuitBreakerRegistry);
   }
 }

@@ -22,7 +22,6 @@ import com.google.common.base.Joiner;
 import com.netflix.spinnaker.front50.ServiceAccountsService;
 import com.netflix.spinnaker.front50.events.ApplicationEventListener;
 import com.netflix.spinnaker.front50.events.ApplicationEventListener.ApplicationModelEvent;
-import com.netflix.spinnaker.front50.exception.NotFoundException;
 import com.netflix.spinnaker.front50.exception.ValidationException;
 import com.netflix.spinnaker.front50.model.notification.HierarchicalLevel;
 import com.netflix.spinnaker.front50.model.notification.NotificationDAO;
@@ -33,6 +32,7 @@ import com.netflix.spinnaker.front50.model.project.ProjectDAO;
 import com.netflix.spinnaker.front50.validator.ApplicationValidationErrors;
 import com.netflix.spinnaker.front50.validator.ApplicationValidator;
 import com.netflix.spinnaker.kork.annotations.NonnullByDefault;
+import com.netflix.spinnaker.kork.web.exceptions.NotFoundException;
 import java.util.*;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
@@ -83,13 +83,28 @@ public class ApplicationService {
     return saveInternal(app, false);
   }
 
-  private Application saveInternal(Application app, boolean mergeDetails) {
-    validate(app);
-
+  private Application saveInternal(Application app, boolean merge) {
+    // When merge==true, the application that is passed in is likely incomplete, so the existing
+    // application record must be loaded and applied to the partial Application. This must be
+    // done prior to validation.
     Application existing = getApplication(app.getName());
-    if (mergeDetails && existing != null) {
+    if (merge && existing != null) {
+      app.setName(existing.getName());
+      app.setCreateTs(existing.getCreateTs());
+      if (app.getDescription() == null) {
+        app.setDescription(existing.getDescription());
+      }
+      if (app.getEmail() == null) {
+        app.setEmail(existing.getEmail());
+      }
+      if (app.getCloudProviders() == null) {
+        app.setCloudProviders(existing.getCloudProviders());
+      }
+
       mergeDetails(app, existing);
     }
+
+    validate(app);
 
     if (existing == null) {
       listenersFor(PRE_CREATE)
@@ -156,12 +171,13 @@ public class ApplicationService {
             p -> {
               log.info("Removing application '{}' from project '{}'", appName, p.getId());
               p.getConfig().getApplications().remove(appName);
-              p.getConfig()
-                  .getClusters()
-                  .forEach(
-                      c ->
-                          Optional.ofNullable(c.getApplications())
-                              .ifPresent(apps -> apps.remove(appName)));
+              Optional.ofNullable(p.getConfig().getClusters())
+                  .ifPresent(
+                      clusters ->
+                          clusters.forEach(
+                              c ->
+                                  Optional.ofNullable(c.getApplications())
+                                      .ifPresent(apps -> apps.remove((appName)))));
 
               // If the project doesn't have anymore applications, cascade the delete to projects.
               if (p.getConfig().getApplications().isEmpty()) {
@@ -222,9 +238,9 @@ public class ApplicationService {
   }
 
   @Nullable
-  private Application getApplication(String name) {
+  private Application getApplication(@Nullable String name) {
     try {
-      return dao.findByName(name.toUpperCase());
+      return dao.findByName(Optional.ofNullable(name).map(String::toUpperCase).orElse(null));
     } catch (NotFoundException e) {
       // Exceptions for flow control == sad.
       return null;

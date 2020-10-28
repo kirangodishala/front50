@@ -13,7 +13,7 @@ import com.fasterxml.jackson.databind.ser.FilterProvider;
 import com.fasterxml.jackson.databind.ser.impl.SimpleFilterProvider;
 import com.google.common.base.Supplier;
 import com.netflix.spinnaker.front50.config.OracleProperties;
-import com.netflix.spinnaker.front50.exception.NotFoundException;
+import com.netflix.spinnaker.kork.web.exceptions.NotFoundException;
 import com.oracle.bmc.auth.AuthenticationDetailsProvider;
 import com.oracle.bmc.auth.SimpleAuthenticationDetailsProvider;
 import com.oracle.bmc.auth.SimplePrivateKeySupplier;
@@ -113,7 +113,6 @@ public class OracleStorageService implements StorageService {
     objectMapper.setFilterProvider(filters);
   }
 
-  @Override
   public void ensureBucketExists() {
     WebResource wr =
         client.resource(
@@ -215,7 +214,7 @@ public class OracleStorageService implements StorageService {
         client.resource(
             UriBuilder.fromPath(endpoint + "/n/{arg1}/b/{arg2}/o")
                 .queryParam("prefix", objectType.group)
-                .queryParam("fields", "name,timeCreated")
+                .queryParam("fields", "name,timeModified")
                 .build(region, namespace, bucketName));
     wr.accept(MediaType.APPLICATION_JSON_TYPE);
     ListObjects listObjects = wr.get(ListObjects.class);
@@ -223,7 +222,7 @@ public class OracleStorageService implements StorageService {
     for (ObjectSummary summary : listObjects.getObjects()) {
       if (summary.getName().endsWith(objectType.defaultMetadataFilename)) {
         results.put(
-            buildObjectKey(objectType, summary.getName()), summary.getTimeCreated().getTime());
+            buildObjectKey(objectType, summary.getName()), summary.getTimeModified().getTime());
       }
     }
     return results;

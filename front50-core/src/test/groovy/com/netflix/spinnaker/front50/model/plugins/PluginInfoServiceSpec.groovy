@@ -15,7 +15,10 @@
  */
 package com.netflix.spinnaker.front50.model.plugins
 
-import com.netflix.spinnaker.front50.exception.NotFoundException
+import com.netflix.spinnaker.front50.echo.EchoService
+import com.netflix.spinnaker.kork.web.exceptions.NotFoundException
+import com.netflix.spinnaker.front50.model.plugins.remote.RemoteExtension
+import com.netflix.spinnaker.front50.model.plugins.remote.stage.StageRemoteExtensionConfig
 import com.netflix.spinnaker.front50.plugins.PluginBinaryStorageService
 import com.netflix.spinnaker.front50.validator.PluginInfoValidator
 import com.netflix.spinnaker.kork.web.exceptions.InvalidRequestException
@@ -27,9 +30,10 @@ class PluginInfoServiceSpec extends Specification {
   PluginInfoRepository repository = Mock()
   PluginInfoValidator validator = Mock()
   PluginBinaryStorageService storageService = Mock()
+  EchoService echoService = Mock()
 
   @Subject
-  PluginInfoService subject = new PluginInfoService(repository, Optional.of(storageService), [validator])
+  PluginInfoService subject = new PluginInfoService(repository, Optional.of(storageService), Optional.of(echoService), [validator])
 
   def "upsert conditionally creates or updates"() {
     given:
@@ -40,7 +44,7 @@ class PluginInfoServiceSpec extends Specification {
 
     then:
     1 * validator.validate(pluginInfo, _)
-    1 * repository.findById("foo.bar") >> {
+    (1.._) * repository.findById("foo.bar") >> {
       throw new NotFoundException("k")
     }
     1 * repository.create("foo.bar", pluginInfo) >> pluginInfo
@@ -51,12 +55,12 @@ class PluginInfoServiceSpec extends Specification {
 
     then:
     1 * validator.validate(pluginInfo, _)
-    1 * repository.findById("foo.bar") >> pluginInfo
+    (1.._) * repository.findById("foo.bar") >> pluginInfo
     1 * repository.update("foo.bar", pluginInfo)
     0 * repository.create(_, _)
   }
 
-  def "upsert with a new release for an existing plugin"() {
+  def "upsert with a new release for an existing plugin, new release contains remote extension configuration"() {
     given:
     PluginInfo currentPluginInfo = new PluginInfo(id: "foo.bar")
     currentPluginInfo.releases.add(new PluginInfo.Release(version: "1.0.0"))
@@ -64,15 +68,34 @@ class PluginInfoServiceSpec extends Specification {
     and:
     PluginInfo newPluginInfo = new PluginInfo(id: "foo.bar")
     newPluginInfo.releases.add(new PluginInfo.Release(version: "2.0.0"))
+    newPluginInfo.releases.get(0).remoteExtensions.add(
+      new RemoteExtension(
+        type: "stage",
+        id: "netflix.remote.remoteWait",
+        transport: new RemoteExtension.RemoteExtensionTransport(
+          http: new RemoteExtension.RemoteExtensionTransport.Http(
+            url: "http://example.com"
+          )
+        ),
+        config: new StageRemoteExtensionConfig(
+          type: "remoteWait",
+          label: "Wait on a remote service",
+          description: "A stage that waits on a remote service",
+          parameters: ["waitTime": 30, "message": "Done"]
+        )
+      ))
 
     when:
     PluginInfo persistedPluginInfo = subject.upsert(newPluginInfo)
 
     then:
     1 * validator.validate(newPluginInfo, _)
-    1 * repository.findById("foo.bar") >> currentPluginInfo
+    2 * repository.findById("foo.bar") >> currentPluginInfo
     1 * repository.update("foo.bar", newPluginInfo)
     0 * repository.create(_, _)
+    1 * echoService.postEvent(_) >> { args ->
+      assert args[0].details.attributes.pluginEventType == "PUBLISHED"
+    }
     0 * _
     persistedPluginInfo.releases.size() == 2
     persistedPluginInfo.releases*.version == ['1.0.0', '2.0.0']
@@ -91,7 +114,6 @@ class PluginInfoServiceSpec extends Specification {
     subject.upsert(newPluginInfo)
 
     then:
-    1 * validator.validate(newPluginInfo, _)
     1 * repository.findById("foo.bar") >> currentPluginInfo
     0 * _
     Exception e = thrown(InvalidRequestException)
@@ -105,12 +127,20 @@ class PluginInfoServiceSpec extends Specification {
 
     PluginInfo.Release newRelease = new PluginInfo.Release(version: "2.0.0")
 
+    and:
+    PluginInfo originalPluginInfo = new PluginInfo(id: "foo.bar")
+    originalPluginInfo.releases.add(new PluginInfo.Release(version: "1.0.0"))
+
     when:
     def result = subject.createRelease("foo.bar", newRelease)
 
     then:
     1 * repository.findById("foo.bar") >> pluginInfo
+    1 * repository.findById("foo.bar") >> originalPluginInfo
     1 * validator.validate(pluginInfo,_)
+    1 * echoService.postEvent(_) >> { args ->
+      assert args[0].details.attributes.pluginEventType == "PUBLISHED"
+    }
     1 * repository.update("foo.bar", pluginInfo)
     result.releases*.version == ["1.0.0", "2.0.0"]
     0 * _
@@ -122,11 +152,21 @@ class PluginInfoServiceSpec extends Specification {
     pluginInfo.releases.add(new PluginInfo.Release(version: "1.0.0", preferred: true))
     pluginInfo.releases.add(new PluginInfo.Release(version: "2.0.0"))
 
+    and:
+    PluginInfo originalPluginInfo = new PluginInfo(id: "foo.bar")
+    originalPluginInfo.releases.add(new PluginInfo.Release(version: "1.0.0", preferred: true))
+    originalPluginInfo.releases.add(new PluginInfo.Release(version: "2.0.0"))
+
     when:
     def result = subject.preferReleaseVersion("foo.bar", "2.0.0", true)
 
     then:
     1 * repository.findById("foo.bar") >> pluginInfo
+    1 * repository.findById("foo.bar") >> originalPluginInfo
+    1 * validator.validate(pluginInfo, _)
+    1 * echoService.postEvent(_) >> { args ->
+      assert args[0].details.attributes.pluginEventType == "PREFERRED_VERSION_UPDATED"
+    }
     1 * repository.update("foo.bar", pluginInfo)
     result.preferred
     !pluginInfo.getReleaseByVersion("1.0.0").get().preferred
@@ -143,7 +183,8 @@ class PluginInfoServiceSpec extends Specification {
     def result = subject.deleteRelease("foo.bar", "2.0.0")
 
     then:
-    1 * repository.findById("foo.bar") >> pluginInfo
+    (1.._) * repository.findById("foo.bar") >> pluginInfo
+    1 * validator.validate(pluginInfo, _)
     1 * repository.update("foo.bar", pluginInfo)
     1 * storageService.getKey("foo.bar", "2.0.0") >> "foo.bar/2.0.0.zip"
     1 * storageService.delete("foo.bar/2.0.0.zip")

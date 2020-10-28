@@ -18,7 +18,6 @@ package com.netflix.spinnaker.front50.model
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.netflix.spectator.api.Registry
-import com.netflix.spinnaker.front50.exception.NotFoundException
 import com.netflix.spinnaker.front50.model.ObjectType.APPLICATION
 import com.netflix.spinnaker.front50.model.ObjectType.APPLICATION_PERMISSION
 import com.netflix.spinnaker.front50.model.ObjectType.DELIVERY
@@ -41,6 +40,7 @@ import com.netflix.spinnaker.front50.model.sql.transactional
 import com.netflix.spinnaker.front50.model.sql.withRetry
 import com.netflix.spinnaker.kork.sql.config.SqlRetryProperties
 import com.netflix.spinnaker.kork.sql.routing.withPool
+import com.netflix.spinnaker.kork.web.exceptions.NotFoundException
 import com.netflix.spinnaker.security.AuthenticatedRequest
 import java.time.Clock
 import kotlin.system.measureTimeMillis
@@ -80,10 +80,6 @@ class SqlStorageService(
       PLUGIN_INFO to DefaultTableDefinition(PLUGIN_INFO, "plugin_info", false),
       PLUGIN_VERSIONS to DefaultTableDefinition(PLUGIN_VERSIONS, "plugin_versions", false)
     )
-  }
-
-  override fun ensureBucketExists() {
-    // no-op
   }
 
   override fun supportsVersioning(): Boolean {
@@ -136,7 +132,8 @@ class SqlStorageService(
       )
     }
 
-    log.debug("Took {}ms to fetch {} objects for {}",
+    log.debug(
+      "Took {}ms to fetch {} objects for {}",
       timeToLoadObjects,
       objects.size,
       objectType
@@ -169,50 +166,53 @@ class SqlStorageService(
     // using a lower `chunkSize` to avoid exceeding default packet size limits.
     allItems.chunked(100).forEach { items ->
       try {
-        jooq.transactional(sqlRetryProperties.transactions) { ctx ->
-          try {
-            ctx.batch(
-              items.map { item ->
-                val insertPairs = definitionsByType[objectType]!!.getInsertPairs(
-                  objectMapper, item.id.toLowerCase(), item
-                )
-                val updatePairs = definitionsByType[objectType]!!.getUpdatePairs(insertPairs)
-
-                ctx.insertInto(
-                  table(definitionsByType[objectType]!!.tableName),
-                  *insertPairs.keys.map { DSL.field(it) }.toTypedArray()
-                )
-                  .values(insertPairs.values)
-                  .onDuplicateKeyUpdate()
-                  .set(updatePairs.mapKeys { DSL.field(it.key) })
-              }
-            ).execute()
-          } catch (e: SQLDialectNotSupportedException) {
-            for (item in items) {
-              storeSingleObject(objectType, item.id.toLowerCase(), item)
-            }
-          }
-
-          if (definitionsByType[objectType]!!.supportsHistory) {
+        withPool(poolName) {
+          jooq.transactional(sqlRetryProperties.transactions) { ctx ->
             try {
               ctx.batch(
                 items.map { item ->
-                  val historyPairs = definitionsByType[objectType]!!.getHistoryPairs(
-                    objectMapper, clock, item.id.toLowerCase(), item
+                  val insertPairs = definitionsByType[objectType]!!.getInsertPairs(
+                    objectMapper, item.id.toLowerCase(), item
                   )
+                  val updatePairs = definitionsByType[objectType]!!.getUpdatePairs(insertPairs)
 
-                  ctx
-                    .insertInto(
-                      table(definitionsByType[objectType]!!.historyTableName),
-                      *historyPairs.keys.map { DSL.field(it) }.toTypedArray()
-                    )
-                    .values(historyPairs.values)
-                    .onDuplicateKeyIgnore()
+                  ctx.insertInto(
+                    table(definitionsByType[objectType]!!.tableName),
+                    *insertPairs.keys.map { DSL.field(it) }.toTypedArray()
+                  )
+                    .values(insertPairs.values)
+                    .onConflict(DSL.field("id", String::class.java))
+                    .doUpdate()
+                    .set(updatePairs.mapKeys { DSL.field(it.key) })
                 }
               ).execute()
             } catch (e: SQLDialectNotSupportedException) {
               for (item in items) {
-                storeSingleObjectHistory(objectType, item.id.toLowerCase(), item)
+                storeSingleObject(objectType, item.id.toLowerCase(), item)
+              }
+            }
+
+            if (definitionsByType[objectType]!!.supportsHistory) {
+              try {
+                ctx.batch(
+                  items.map { item ->
+                    val historyPairs = definitionsByType[objectType]!!.getHistoryPairs(
+                      objectMapper, clock, item.id.toLowerCase(), item
+                    )
+
+                    ctx
+                      .insertInto(
+                        table(definitionsByType[objectType]!!.historyTableName),
+                        *historyPairs.keys.map { DSL.field(it) }.toTypedArray()
+                      )
+                      .values(historyPairs.values)
+                      .onDuplicateKeyIgnore()
+                  }
+                ).execute()
+              } catch (e: SQLDialectNotSupportedException) {
+                for (item in items) {
+                  storeSingleObjectHistory(objectType, item.id.toLowerCase(), item)
+                }
               }
             }
           }
@@ -294,7 +294,8 @@ class SqlStorageService(
       objectKeys.put(resultSet.getString(1), resultSet.getLong(2))
     }
 
-    log.debug("Took {}ms to fetch {} object keys for {}",
+    log.debug(
+      "Took {}ms to fetch {} object keys for {}",
       System.currentTimeMillis() - startTime,
       objectKeys.size,
       objectType
